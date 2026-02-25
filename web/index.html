@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Smart Food Donation</title>
+
+<script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY"></script>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:Segoe UI;}
+
+body{
+ height:100vh;
+ background:
+ linear-gradient(rgba(0,0,0,0.6),rgba(0,0,0,0.6)),
+ url("zero-waste.jpg") no-repeat center center fixed;
+ background-size:cover;
+ display:flex;
+ justify-content:center;
+ align-items:center;
+ position:relative;
+}
+
+.food-cycle{
+ position:absolute;
+ top:15px;
+ right:15px;
+ width:170px;
+ border-radius:12px;
+ box-shadow:0 5px 15px rgba(0,0,0,0.5);
+}
+
+.app{
+ width:95%;
+ max-width:420px;
+ background:rgba(255,255,255,0.95);
+ border-radius:18px;
+ padding:20px;
+ box-shadow:0 8px 25px rgba(0,0,0,0.4);
+ max-height:95vh;
+ overflow:auto;
+}
+
+.header{
+ text-align:center;
+ font-size:18px;
+ font-weight:bold;
+ color:#27ae60;
+ margin-bottom:10px;
+}
+
+input,textarea,button{
+ width:100%;
+ padding:9px;
+ margin:6px 0;
+ border-radius:8px;
+ border:1px solid #ccc;
+}
+
+button{
+ background:#27ae60;
+ color:white;
+ border:none;
+ font-weight:bold;
+ cursor:pointer;
+}
+
+button:disabled{
+ background:#999;
+ cursor:not-allowed;
+}
+
+.reject{background:#e74c3c;}
+.adminBtn{background:#2c3e50;}
+
+video,img{
+ width:100%;
+ border-radius:8px;
+ margin-top:6px;
+}
+
+table{
+ width:100%;
+ font-size:12px;
+ margin-top:8px;
+ border-collapse:collapse;
+}
+
+th,td{
+ border:1px solid #ccc;
+ padding:4px;
+ text-align:center;
+}
+
+.hidden{display:none}
+</style>
+</head>
+
+<body>
+
+<img src="food-cycle.jpg" class="food-cycle">
+
+<div class="app">
+
+<div class="header">🌱 Smart Food Donation</div>
+
+<!-- LOGIN -->
+<div id="loginDiv">
+<input id="loginEmail" placeholder="Email">
+<input id="loginPassword" type="password" placeholder="Password">
+<button onclick="login()">Login</button>
+<p style="font-size:12px;text-align:center;">
+Admin: admin@food.com / admin123
+</p>
+</div>
+
+<!-- OTP -->
+<div id="otpDiv" class="hidden">
+<input id="otpInput" placeholder="Enter OTP (1234)">
+<button onclick="verifyOTP()">Verify OTP</button>
+</div>
+
+<!-- USER DASHBOARD -->
+<div id="userDiv" class="hidden">
+
+<h4>Donate Food</h4>
+<input id="food" placeholder="Food Item">
+<input id="qty" placeholder="Quantity">
+<input id="phone" placeholder="Phone Number">
+<textarea id="address" placeholder="Address"></textarea>
+
+<button onclick="getLocation()">📍 Get Live Location</button>
+<div id="map" style="height:150px"></div>
+
+<h4>Camera</h4>
+<video id="video" autoplay></video>
+<button onclick="capturePhoto()">Capture</button>
+<canvas id="canvas" class="hidden"></canvas>
+<img id="preview">
+
+<button onclick="addDonation()">Submit Donation</button>
+
+<h4>Receive Food</h4>
+<table id="receiveTable"></table>
+
+<button class="adminBtn" onclick="logout()">Logout</button>
+</div>
+
+<!-- ADMIN -->
+<div id="adminDiv" class="hidden">
+<h4>Admin Dashboard</h4>
+<table id="adminTable"></table>
+<button class="adminBtn" onclick="logout()">Logout</button>
+</div>
+
+</div>
+
+<script>
+
+let donations=JSON.parse(localStorage.getItem("donations")||"[]");
+let currentUser="";
+let generatedOTP="1234";
+
+/* LOGIN */
+function login(){
+ let email=loginEmail.value;
+ let pass=loginPassword.value;
+
+ if(email==="admin@food.com" && pass==="admin123"){
+   loginDiv.classList.add("hidden");
+   adminDiv.classList.remove("hidden");
+   renderAdmin();
+   return;
+ }
+
+ if(email!=="" && pass!==""){
+   currentUser=email;
+   loginDiv.classList.add("hidden");
+   otpDiv.classList.remove("hidden");
+   alert("Demo OTP Sent: 1234");
+ }else{
+   alert("Enter email & password");
+ }
+}
+
+/* OTP VERIFY */
+function verifyOTP(){
+ if(otpInput.value===generatedOTP){
+   otpDiv.classList.add("hidden");
+   userDiv.classList.remove("hidden");
+   startCamera();
+   renderUser();
+ }else{
+   alert("Invalid OTP");
+ }
+}
+
+/* LOGOUT */
+function logout(){location.reload();}
+
+/* GOOGLE MAP */
+function getLocation(){
+ navigator.geolocation.getCurrentPosition(pos=>{
+   let lat=pos.coords.latitude;
+   let lng=pos.coords.longitude;
+
+   let map=new google.maps.Map(document.getElementById("map"),{
+     center:{lat:lat,lng:lng},
+     zoom:15
+   });
+
+   new google.maps.Marker({
+     position:{lat:lat,lng:lng},
+     map:map
+   });
+
+   address.value=lat+","+lng;
+ });
+}
+
+/* CAMERA */
+function startCamera(){
+ navigator.mediaDevices.getUserMedia({video:true})
+ .then(stream=>video.srcObject=stream);
+}
+
+function capturePhoto(){
+ let ctx=canvas.getContext("2d");
+ canvas.width=video.videoWidth;
+ canvas.height=video.videoHeight;
+ ctx.drawImage(video,0,0);
+ preview.src=canvas.toDataURL("image/png");
+}
+
+/* ADD DONATION */
+function addDonation(){
+ donations.push({
+   user:currentUser,
+   food:food.value,
+   qty:qty.value,
+   phone:phone.value,
+   address:address.value,
+   image:preview.src,
+   status:"Pending"
+ });
+
+ localStorage.setItem("donations",JSON.stringify(donations));
+ alert("Donation Submitted!");
+ renderUser();
+}
+
+/* USER TABLE */
+function renderUser(){
+ let table="<tr><th>Food</th><th>Qty</th><th>Status</th><th>Action</th></tr>";
+
+ donations.forEach((d,i)=>{
+   table+=`<tr>
+   <td>${d.food}</td>
+   <td>${d.qty}</td>
+   <td>${d.status}</td>
+   <td>
+   ${d.status==="Approved" ?
+     `<button onclick="receiveFood(${i})">Receive</button>` :
+     "Not Available"}
+   </td>
+   </tr>`;
+ });
+
+ receiveTable.innerHTML=table;
+}
+
+function receiveFood(i){
+ donations[i].status="Received";
+ save();
+}
+
+/* ADMIN TABLE */
+function renderAdmin(){
+ let table=`
+ <tr>
+  <th>User</th>
+  <th>Food</th>
+  <th>Qty</th>
+  <th>Phone</th>
+  <th>Location</th>
+  <th>Image</th>
+  <th>Status</th>
+  <th>Action</th>
+ </tr>`;
+
+ donations.forEach((d,i)=>{
+   let disabled=d.status!=="Pending"?"disabled":"";
+   table+=`
+   <tr>
+    <td>${d.user}</td>
+    <td>${d.food}</td>
+    <td>${d.qty}</td>
+    <td>${d.phone}</td>
+    <td>${d.address}</td>
+    <td><img src="${d.image}" width="50"></td>
+    <td>${d.status}</td>
+    <td>
+      <button ${disabled} onclick="approve(${i})">Approve</button>
+      <button class="reject" ${disabled} onclick="reject(${i})">Reject</button>
+    </td>
+   </tr>`;
+ });
+
+ adminTable.innerHTML=table;
+}
+
+function approve(i){donations[i].status="Approved";save();}
+function reject(i){donations[i].status="Rejected";save();}
+
+function save(){
+ localStorage.setItem("donations",JSON.stringify(donations));
+ renderAdmin();
+}
+
+</script>
+
+</body>
+</html>
